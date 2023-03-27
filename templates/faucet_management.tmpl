@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Whitelist Management</title>
+</head>
+<body>
+	<h1>VIP Faucet  Whitelist Management</h1>
+	<h3>{{.email}},you are able to add an IP to whiteList using below form </h3>
+
+	<!-- Form to add IP address and memo string -->
+	<form method="POST" action="/faucet_management">
+		<label for="ip">IP Address:</label>
+		<input type="text" id="ip" name="ip" required><br><br>
+		<label for="memo">Memo:</label>
+		<input type="text" id="memo" name="memo" required><br><br>
+		<input type="submit" value="Add">
+	</form>
+	<!-- Display any error messages -->
+	{{if .ErrorMessage}}
+		<p style="color: red">{{.ErrorMessage}}</p>
+	{{end}}
+
+	<!-- Display any success messages -->
+	{{if .SuccessMessage}}
+		<p style="color: green">{{.SuccessMessage}}</p>
+	{{end}}
+	<hr>
+
+	<!-- Table to display IP addresses and memo strings in the whitelist -->
+	<table>
+		<thead>
+			<tr>
+				<th>IP Address</th>
+				<th>Memo</th>
+			</tr>
+		</thead>
+		<tbody>
+			{{range .IPMemoList}}
+			<tr>
+				<td>{{.IP}}</td>
+				<td>{{.Memo}}</td>
+			</tr>
+			{{end}}
+		</tbody>
+	</table>
+
+</body>
+</html>

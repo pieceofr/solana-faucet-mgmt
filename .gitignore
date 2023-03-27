@@ -1,5 +1,5 @@
 # User Define for  project
-gc-client-info.json
+config.json
 go.sum
 # Binaries for programs and plugins
 *.exe
