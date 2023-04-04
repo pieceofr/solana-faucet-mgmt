@@ -1,6 +1,6 @@
 # User Define for  project
-config.json
-go.sum
+*.json
+*.sum
 # Binaries for programs and plugins
 *.exe
 *.exe~
