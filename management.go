@@ -73,11 +73,11 @@ func handleAddToWhiteList(c *gin.Context) {
 			"email": session.Get("email").(string), "IPMemoList": wlist, "ErrorMessage": addErr})
 		return
 	}
-
-	updateErr := executeBashScript(config.UpdateUFWPath)
-	if updateErr != nil {
+	wlist, err = ReadWhiteList()
+	if err != nil {
 		c.HTML(http.StatusNotFound, "faucet_management.tmpl", gin.H{"message": "IP added successfully",
-			"email": email, "IPMemoList": wlist, "ErrorMessage": updateErr})
+			"email": session.Get("email").(string), "IPMemoList": wlist, "ErrorMessage": "error+reading+whitelist+data"})
+		c.HTML(http.StatusOK, "error.tmpl", gin.H{"message": "error+reading+whitelist+data"})
 		return
 	}
 
@@ -117,7 +117,10 @@ func addIPToWhitelist(ip string, memo string, whitelistPath string) error {
 	if _, err := f.WriteString(ip + ";" + rmMemo + "\n"); err != nil {
 		return fmt.Errorf("error writing IP address to whitelist file: %v", err)
 	}
-
+	updateErr := executeBashScript(config.UpdateUFWPath)
+	if updateErr != nil {
+		return fmt.Errorf("error execute script: %v", updateErr)
+	}
 	fmt.Println("IP address added to whitelist")
 	return nil
 }
