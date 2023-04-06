@@ -33,7 +33,7 @@ func mongo_init() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Mongo session is established!!")
+	log.Println("Info:Mongo session is established!!")
 }
 
 func mongoUpdateUser(client *mongo.Client, dbName, collectionName string, user User) error {
@@ -108,19 +108,16 @@ func IsUserValidate(email string, token string) error {
 	// Check if the user ID exists in the database
 	collection := mongoClient.Database(config.MongoDB).Collection(config.MongoLoginCollection)
 	filter := bson.M{"user": email}
-	fmt.Println("IsUserValidate: ", email)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	var existUser User
 	err := collection.FindOne(ctx, filter).Decode(&existUser)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			fmt.Println("IsUserValidate No user found: ", email)
 			return mongo.ErrNoDocuments
 		}
 	}
 	if existUser.Token != token {
-		fmt.Println("IsUserValidate Ntoken is not vali: ", token)
 		return fmt.Errorf("User '%s' token is not valid", token)
 	}
 

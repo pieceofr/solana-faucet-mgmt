@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,6 +28,7 @@ var (
 	oauthStateString     = "random_string_1"
 	allowedClientDomains []string
 	mongoClient          *mongo.Client
+	logbuf               bytes.Buffer
 )
 
 type Config struct {
@@ -46,21 +49,21 @@ type Config struct {
 }
 
 func init() {
-	configFile, err := ioutil.ReadFile("config.json")
+	log := log.New(&logbuf, "logger: ", log.Lshortfile)
+	configFile, err := ioutil.ReadFile("/home/sol/wks_go/solana-faucet-mgmt/config.json")
 	if err != nil {
-		fmt.Println(fmt.Errorf("failed to read config file: %v", err))
-		os.Exit(1)
+		log.Fatalln(fmt.Errorf("failed to read config file: %v", err))
+
 	}
 
 	err = json.Unmarshal(configFile, &config)
 	if err != nil {
-		fmt.Println(fmt.Errorf("failed to parse config file: %v", err))
-		os.Exit(1)
+		log.Fatalln(fmt.Errorf("failed to parse config file: %v", err))
 	}
 	googleOauthConfig = &oauth2.Config{
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
-		RedirectURL:  "http://vipfaucet.solana.com:8080/auth/google/callback",
+		RedirectURL:  "http://faucet-vip.dv.solana.com:8080/auth/google/callback",
 		Scopes: []string{"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint: google.Endpoint,
@@ -70,15 +73,14 @@ func init() {
 	if config.WhiteListPath == "" {
 		wd, err := os.Getwd()
 		if err != nil {
-			fmt.Errorf("error getting current working directory: %v", err)
-			os.Exit(1)
+			log.Fatalln(err)
 		}
 		config.WhiteListPath = wd + "/whitelist.txt"
-		fmt.Println("no whitelist path specified, user default path: " + config.WhiteListPath)
+		log.Println("no whitelist path specified, user default path: " + config.WhiteListPath)
 	}
 	if config.ServerPort == "" {
 		config.ServerPort = "8080"
-		fmt.Println("no ServerPort path specified, default port: " + "8080")
+		log.Println("no ServerPort path specified, default port: " + "8080")
 	}
 	mongo_init()
 	//gin.DisableConsoleColor()
@@ -106,18 +108,20 @@ func handleLogin(c *gin.Context) {
 func handleOauthCallback(c *gin.Context) {
 	state := c.Query("state")
 	if state != oauthStateString {
-		fmt.Println("Invalid oauth state")
+		log.Println("Error:invalid oauth state")
 		c.Redirect(http.StatusTemporaryRedirect, "/error?message=Failed+to+match+oauth+state")
 		return
 	}
 	code := c.Query("code")
 	token, err := googleOauthConfig.Exchange(oauth2.NoContext, code)
 	if err != nil {
+		log.Println("Error:token exchange:", err)
 		c.Redirect(http.StatusTemporaryRedirect, "/error?message=Failed+to+exchange")
 		return
 	}
 	response, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + token.AccessToken)
 	if err != nil {
+		log.Println("Error:get token:", err)
 		c.Redirect(http.StatusTemporaryRedirect, "/error?message=Failed+to+get+user+info")
 		return
 	}
@@ -125,7 +129,7 @@ func handleOauthCallback(c *gin.Context) {
 
 	contents, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		fmt.Println("Failed to read user info:", err)
+		log.Println("Error:read response body:", err)
 		c.Redirect(http.StatusTemporaryRedirect, "/error?message=Failed+to+read+user+info")
 		return
 	}
@@ -134,12 +138,13 @@ func handleOauthCallback(c *gin.Context) {
 	json.Unmarshal(contents, &userInfo)
 
 	email := userInfo["email"].(string)
-	// err = checkEmailDomain(allowedClientDomains, email)
-	// if err != nil {
-	// 	c.Redirect(http.StatusTemporaryRedirect, "/error?message=Invalid domain. Please use a solana.com email.")
-	// 	return
-	// }
-	// redirect to islogin page, and add email, name into url's query string.
+	err = checkEmailDomain(allowedClientDomains, email)
+	if err != nil {
+		log.Println("Error:email domain:", err)
+		c.Redirect(http.StatusTemporaryRedirect, "/error?message=Invalid domain. Please use a solana.com email.")
+		return
+	}
+	log.Println("Info:", email, " login success")
 
 	// Save to mongodb for checking
 	createTime := time.Now().UTC()
@@ -154,18 +159,20 @@ func handleOauthCallback(c *gin.Context) {
 
 	err = mongoUpdateUser(mongoClient, config.MongoDB, config.MongoLoginCollection, u)
 	if err != nil {
+		log.Println("Error:mongo update user:", err)
 		c.Redirect(http.StatusTemporaryRedirect, "/error?message=Failed+to+add+user")
 		return
 	}
 	redirectURL, err := url.Parse("/faucet_management")
 	if err != nil {
-		fmt.Println("Parse Failed")
+		log.Println("Error:compose redirect url:", err)
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 
 	query, err := url.ParseQuery(redirectURL.RawQuery)
 	if err != nil {
+		log.Println("Error:compose redirect url:", err)
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
@@ -176,7 +183,6 @@ func handleOauthCallback(c *gin.Context) {
 }
 
 func handleError(c *gin.Context) {
-	fmt.Println("***handleError")
 	message := c.Query("message")
 	c.HTML(http.StatusOK, "error.tmpl", gin.H{"message": message})
 }
@@ -188,7 +194,7 @@ func main() {
 	router.LoadHTMLGlob("templates/*")
 	router.GET("/", handleMain)
 	router.GET("/login", handleLogin)
-	// router.GET("/error", handleError)
+	router.GET("/error", handleError)
 	router.GET("/auth/google/callback", handleOauthCallback)
 	router.GET("/faucet_management", handleFaucetManagement)
 	router.POST("/faucet_management", handleAddToWhiteList)

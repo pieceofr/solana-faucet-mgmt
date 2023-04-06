@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -22,20 +23,21 @@ func handleFaucetManagement(c *gin.Context) {
 	session.Save()
 	if session.Get("email") == nil || session.Get("email").(string) == "" ||
 		session.Get("token") == nil || session.Get("token").(string) == "" {
+		log.Println("Error:invalid session token:")
 		c.HTML(http.StatusOK, "error.tmpl", gin.H{"message": "invalid+session"})
 		return
 	}
 
 	err := IsUserValidate(session.Get("email").(string), session.Get("token").(string))
 	if err != nil {
-		fmt.Println("Session error:", err)
+		log.Println("Error:invalid session:", err)
 		c.HTML(http.StatusOK, "error.tmpl", gin.H{"message": "invalid+session"})
 		return
 	}
 
 	wlist, err := ReadWhiteList()
 	if err != nil {
-		fmt.Println("handleFaucetManagement read error", err)
+		log.Println("Error:invalid whitelist:", err)
 		c.Redirect(http.StatusTemporaryRedirect, "/error?msg=error reading whitelist data")
 	}
 
@@ -47,7 +49,7 @@ func handleAddToWhiteList(c *gin.Context) {
 	session := sessions.Default(c)
 	if session.Get("email") == nil || session.Get("email").(string) == "" ||
 		session.Get("token") == nil || session.Get("token").(string) == "" {
-		fmt.Println("Session error:", "invalid session")
+		log.Println("Error:invalid session token")
 		c.HTML(http.StatusOK, "error.tmpl", gin.H{"message": "invalid+session"})
 		return
 	}
@@ -55,34 +57,33 @@ func handleAddToWhiteList(c *gin.Context) {
 	token := session.Get("token").(string)
 	err := IsUserValidate(email, token)
 	if err != nil {
-		fmt.Println("IsUserValidate error", err)
+		log.Println("Error:invalid session:", err)
 		c.HTML(http.StatusOK, "error.tmpl", gin.H{"message": "invalid+session"})
 		return
 	}
 
 	wlist, err := ReadWhiteList()
 	if err != nil {
-		c.HTML(http.StatusNotFound, "faucet_management.tmpl", gin.H{"message": "IP added successfully",
-			"email": session.Get("email").(string), "IPMemoList": wlist, "ErrorMessage": "error+reading+whitelist+data"})
+		log.Println("Error:invalid whitelist:", err)
 		c.HTML(http.StatusOK, "error.tmpl", gin.H{"message": "error+reading+whitelist+data"})
 		return
 	}
 	addErr := addIPToWhitelist(c.PostForm("ip"), c.PostForm("memo"), config.WhiteListPath)
 	if addErr != nil {
-		c.HTML(http.StatusNotFound, "faucet_management.tmpl", gin.H{"message": "IP added successfully",
-			"email": session.Get("email").(string), "IPMemoList": wlist, "ErrorMessage": addErr})
+		log.Println("Error:addIPToWhitelist:", err)
+		c.HTML(http.StatusNotFound, "faucet_management.tmpl", gin.H{"email": session.Get("email").(string),
+			"IPMemoList": wlist, "ErrorMessage": addErr, "SuccessMessage": ""})
 		return
 	}
 	wlist, err = ReadWhiteList()
 	if err != nil {
-		c.HTML(http.StatusNotFound, "faucet_management.tmpl", gin.H{"message": "IP added successfully",
-			"email": session.Get("email").(string), "IPMemoList": wlist, "ErrorMessage": "error+reading+whitelist+data"})
+		log.Println("Error:invalid whitelist after add:", err)
 		c.HTML(http.StatusOK, "error.tmpl", gin.H{"message": "error+reading+whitelist+data"})
 		return
 	}
-
+	log.Println("Info:", email, "add IP:", c.PostForm("ip"), " to whitelist successfully")
 	c.HTML(200, "faucet_management.tmpl", gin.H{"message": "IP added successfully",
-		"email": email, "IPMemoList": wlist, "SuccessMessage": "IP is add"})
+		"email": email, "IPMemoList": wlist, "SuccessMessage": "IP is add", "ErrorMessage": ""})
 
 }
 
@@ -97,12 +98,11 @@ func addIPToWhitelist(ip string, memo string, whitelistPath string) error {
 	if err != nil {
 		return fmt.Errorf("error reading whitelist file: %v", err)
 	}
-
 	// Check if the IP address is already in the whitelist
 	whitelistLines := strings.Split(string(whitelistData), "\n")
 	for _, line := range whitelistLines {
 		if line == ip {
-			fmt.Println("IP address already exists in the whitelist")
+			log.Println("Warn:IP is already in whitelist")
 			return nil
 		}
 	}
@@ -121,7 +121,6 @@ func addIPToWhitelist(ip string, memo string, whitelistPath string) error {
 	if updateErr != nil {
 		return fmt.Errorf("error execute script: %v", updateErr)
 	}
-	fmt.Println("IP address added to whitelist")
 	return nil
 }
 
