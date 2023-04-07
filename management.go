@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -12,6 +13,11 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
+
+type WhitelistEntry struct {
+	IP   string
+	Memo string
+}
 
 func handleFaucetManagement(c *gin.Context) {
 	session := sessions.Default(c)
@@ -84,38 +90,34 @@ func handleAddToWhiteList(c *gin.Context) {
 	log.Println("Info:", email, "add IP:", c.PostForm("ip"), " to whitelist successfully")
 	c.HTML(200, "faucet_management.tmpl", gin.H{"message": "IP added successfully",
 		"email": email, "IPMemoList": wlist, "SuccessMessage": "IP is add", "ErrorMessage": ""})
-
 }
 
 func addIPToWhitelist(ip string, memo string, whitelistPath string) error {
-	// Check if the IP address is a valid IPv4 or IPv6 address
+	ip = strings.TrimSpace(ip)
+	memo = strings.ReplaceAll(memo, ";", "")
 	if net.ParseIP(ip) == nil {
 		return fmt.Errorf("invalid IP address format")
 	}
-	rmMemo := strings.ReplaceAll(memo, ";", "")
-	// Read the current whitelist file
-	whitelistData, err := os.ReadFile(whitelistPath)
+	whitelist, err := readWhiteList(config.WhiteListPath)
 	if err != nil {
-		return fmt.Errorf("error reading whitelist file: %v", err)
+		return fmt.Errorf("error parse whitelist file: %v", err)
 	}
-	// Check if the IP address is already in the whitelist
-	whitelistLines := strings.Split(string(whitelistData), "\n")
-	for _, line := range whitelistLines {
-		if line == ip {
-			log.Println("Warn:IP is already in whitelist")
+	for i, v := range whitelist {
+		if v.IP == ip && v.Memo == memo {
+			return fmt.Errorf("IP address already in whitelist")
+		} else if v.IP == ip && v.Memo != memo {
+			whitelist[i] = WhitelistEntry{IP: ip, Memo: memo}
+			err = writeWhitelistFile(whitelist, config.WhiteListPath)
+			if err != nil {
+				return err
+			}
 			return nil
 		}
 	}
-
-	// Append the IP address to the whitelist file
-	f, err := os.OpenFile(whitelistPath, os.O_APPEND|os.O_WRONLY, 0644)
+	whitelist = append(whitelist, WhitelistEntry{IP: ip, Memo: memo})
+	err = writeWhitelistFile(whitelist, config.WhiteListPath)
 	if err != nil {
-		return fmt.Errorf("error opening whitelist file: %v", err)
-	}
-	defer f.Close()
-
-	if _, err := f.WriteString(ip + ";" + rmMemo + "\n"); err != nil {
-		return fmt.Errorf("error writing IP address to whitelist file: %v", err)
+		return err
 	}
 	updateErr := executeBashScript(config.UpdateUFWPath)
 	if updateErr != nil {
@@ -138,6 +140,56 @@ func executeBashScript(scriptPath string) error {
 	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("Failed to execute script: %s", err)
+	}
+
+	return nil
+}
+
+func readWhiteList(listpath string) ([]WhitelistEntry, error) {
+	var whitelist []WhitelistEntry
+	f, err := os.Open(listpath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, ";")
+		if len(fields) != 2 {
+			continue // Skip lines with incorrect format
+		}
+		w := WhitelistEntry{
+			IP:   fields[0],
+			Memo: fields[1],
+		}
+		whitelist = append(whitelist, w)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return whitelist, nil
+}
+
+func writeWhitelistFile(whitelist []WhitelistEntry, listpath string) error {
+	f, err := os.Create(listpath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	writer := bufio.NewWriter(f)
+	for _, w := range whitelist {
+		line := fmt.Sprintf("%s;%s\n", w.IP, w.Memo)
+		_, err := writer.WriteString(line)
+		if err != nil {
+			return err
+		}
+	}
+	err = writer.Flush()
+	if err != nil {
+		return err
 	}
 
 	return nil

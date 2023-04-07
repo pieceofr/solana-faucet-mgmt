@@ -43,3 +43,49 @@ func TestTimePlusSeconds(t *testing.T) {
 		t.Errorf("Expected %v but got %v", expected, future)
 	}
 }
+
+var whiteListPath = "/home/sol/faucet-vip/whitelist_test.txt"
+
+func TestAddWhiteList(t *testing.T) {
+	wl := []WhitelistEntry{
+		{
+			IP:   "127.0.0.1",
+			Memo: "test",
+		},
+		{
+			IP:   "192.168.1.1",
+			Memo: "test",
+		},
+	}
+	err := writeWhitelistFile(wl, whiteListPath)
+	if err != nil {
+		t.Errorf("Error adding whitelist: %v", err)
+	}
+}
+
+func TestUpdateWhiteList(t *testing.T) {
+	wl := []WhitelistEntry{
+		{
+			IP:   "127.0.0.1",
+			Memo: "test1",
+		},
+		{
+			IP:   "192.168.1.1",
+			Memo: "update",
+		},
+	}
+	err := writeWhitelistFile(wl, whiteListPath)
+	if err != nil {
+		t.Errorf("Error adding whitelist: %v", err)
+	}
+}
+
+func TestReadWhiteList(t *testing.T) {
+	wl, err := readWhiteList(whiteListPath)
+	if err != nil {
+		t.Errorf("Error reading whitelist: %v", err)
+	}
+	for _, v := range wl {
+		t.Logf("%v", v)
+	}
+}
