@@ -38,6 +38,7 @@ type Config struct {
 	ClientDomains        []string `json:"client_domains"`
 	WhiteListPath        string   `json:"whitelist_path"`
 	UpdateUFWPath        string   `json:"update_ufw_script_path"`
+	DeleteUFWPath        string   `json:"remove_ip_script_path"`
 	ServerPort           string   `json:"server_port"`
 	SessionMaxAge        int      `json:"session_max_age"`
 	MongoAddr            string   `json:"mongo_address"`
@@ -197,7 +198,7 @@ func main() {
 	router.GET("/error", handleError)
 	router.GET("/auth/google/callback", handleOauthCallback)
 	router.GET("/faucet_management", handleFaucetManagement)
-	router.POST("/faucet_management", handleAddToWhiteList)
+	router.POST("/faucet_management", handleUpdateWhitelist)
 	defer func() {
 		if mongoClient != nil {
 			mongoClient.Disconnect(context.Background())

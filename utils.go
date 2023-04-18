@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/url"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -58,4 +60,21 @@ func getURLOfEmailToken(path string, email string, token string) (*url.URL, erro
 	query.Add("gtoken", token)
 	redirectURL.RawQuery = query.Encode()
 	return redirectURL, nil
+}
+
+func executeBashScript(scriptPath string, arg string) error {
+	// Check if the file exists
+	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
+		return fmt.Errorf("File does not exist: %s", scriptPath)
+	}
+	var cmd *exec.Cmd
+	cmd = exec.Command("bash", scriptPath, arg)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("Failed to execute script: %s", err)
+	}
+
+	return nil
 }
