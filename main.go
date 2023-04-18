@@ -64,7 +64,7 @@ func init() {
 	googleOauthConfig = &oauth2.Config{
 		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
-		RedirectURL:  "https://faucet-vip.dv.solana.com:8080/auth/google/callback",
+		RedirectURL:  "https://faucet-vip.devnet.solana.com:8080/auth/google/callback",
 		Scopes: []string{"https://www.googleapis.com/auth/userinfo.email",
 			"https://www.googleapis.com/auth/userinfo.profile"},
 		Endpoint: google.Endpoint,
